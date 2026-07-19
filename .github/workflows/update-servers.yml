@@ -1,0 +1,45 @@
+name: Update VPN Servers
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-servers
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch and filter fastest 25 servers
+        run: python scripts/fetch_servers.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add servers.csv
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update VPN servers [skip ci]"
+            git push
+          fi
+
+      - name: Purge jsDelivr cache
+        if: always()
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/$GITHUB_REPOSITORY@main/servers.csv" || true
